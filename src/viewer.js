@@ -110,6 +110,7 @@ $.Viewer = function( options ) {
         //in initialize.  Its still considered idiomatic to put them here
         source:     null,
         drawer:     null,
+        drawers:    [],
         viewport:   null,
         profiler:   null,
 
@@ -428,6 +429,7 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
             this.viewport, 
             this.canvas
         );
+        this.drawers.push( this.drawer );
 
         //this.profiler = new $.Profiler();
 
@@ -478,6 +480,7 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
         this.source     = null;
         this.viewport   = null;
         this.drawer     = null;
+        this.drawers    = [];
         //this.profiler   = null;
         this.canvas.innerHTML = "";
         return this;
@@ -707,6 +710,25 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
         return this;
     }
 
+    /**
+     * @function
+     * @name OpenSeadragon.Viewer.prototype.addLayer
+     */
+    addLayer : function( tileSource ) {
+
+        var drawer = new $.Drawer(
+            tileSource, 
+            this.viewport, 
+            this.canvas
+        );
+
+        this.drawers.push( drawer );
+
+        updateOnce( this );
+
+        return drawer.canvas;
+	}
+	
 });
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -916,11 +938,28 @@ function updateOnce( viewer ) {
         abortControlsAutoHide( viewer );
     }
 
+	function updateDrawers() {
+		var i, numDrawers = viewer.drawers.length;
+		for (i = 0; i < numDrawers; i+=1) {
+			viewer.drawers[i].update();			
+		}
+	}
+
+	function drawersNeedUpdate() {
+		var i, numDrawers = viewer.drawers.length;
+		for (i = 0; i < numDrawers; i+=1) {
+			if (viewer.drawers[i].needsUpdate()) {
+				return true;
+			};			
+		}
+		return false;
+	}
+	
     if ( animated ) {
-        viewer.drawer.update();
+        updateDrawers();
         viewer.raiseEvent( "animation" );
-    } else if ( viewer._forceRedraw || viewer.drawer.needsUpdate() ) {
-        viewer.drawer.update();
+    } else if ( viewer._forceRedraw || drawersNeedUpdate() ) {
+        updateDrawers();
         viewer._forceRedraw = false;
     } 
 
