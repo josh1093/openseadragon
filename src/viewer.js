@@ -179,79 +179,78 @@ $.Viewer = function( options ) {
     //////////////////////////////////////////////////////////////////////////
     // Navigation Controls
     //////////////////////////////////////////////////////////////////////////
-    var beginZoomingInHandler   = $.delegate( this, beginZoomingIn ),
-        endZoomingHandler       = $.delegate( this, endZooming ),
-        doSingleZoomInHandler   = $.delegate( this, doSingleZoomIn ),
-        beginZoomingOutHandler  = $.delegate( this, beginZoomingOut ),
-        doSingleZoomOutHandler  = $.delegate( this, doSingleZoomOut ),
-        onHomeHandler           = $.delegate( this, onHome ),
-        onFullPageHandler       = $.delegate( this, onFullPage ),
-        navImages               = this.navImages,
-        zoomIn = new $.Button({ 
+    if ( this.showNavigationControl ) {
+        var beginZoomingInHandler   = $.delegate( this, beginZoomingIn ),
+            endZoomingHandler       = $.delegate( this, endZooming ),
+            doSingleZoomInHandler   = $.delegate( this, doSingleZoomIn ),
+            beginZoomingOutHandler  = $.delegate( this, beginZoomingOut ),
+            doSingleZoomOutHandler  = $.delegate( this, doSingleZoomOut ),
+            onHomeHandler           = $.delegate( this, onHome ),
+            onFullPageHandler       = $.delegate( this, onFullPage ),
+            navImages               = this.navImages,
+            zoomIn = new $.Button({ 
+                clickTimeThreshold: this.clickTimeThreshold,
+                clickDistThreshold: this.clickDistThreshold,
+                tooltip:    $.getString( "Tooltips.ZoomIn" ), 
+                srcRest:    resolveUrl( this.prefixUrl, navImages.zoomIn.REST ),
+                srcGroup:   resolveUrl( this.prefixUrl, navImages.zoomIn.GROUP ),
+                srcHover:   resolveUrl( this.prefixUrl, navImages.zoomIn.HOVER ),
+                srcDown:    resolveUrl( this.prefixUrl, navImages.zoomIn.DOWN ),
+                onPress:    beginZoomingInHandler,
+                onRelease:  endZoomingHandler,
+                onClick:    doSingleZoomInHandler,
+                onEnter:    beginZoomingInHandler,
+                onExit:     endZoomingHandler
+            }),
+            zoomOut = new $.Button({ 
+                clickTimeThreshold: this.clickTimeThreshold,
+                clickDistThreshold: this.clickDistThreshold,
+                tooltip:    $.getString( "Tooltips.ZoomOut" ), 
+                srcRest:    resolveUrl( this.prefixUrl, navImages.zoomOut.REST ), 
+                srcGroup:   resolveUrl( this.prefixUrl, navImages.zoomOut.GROUP ), 
+                srcHover:   resolveUrl( this.prefixUrl, navImages.zoomOut.HOVER ), 
+                srcDown:    resolveUrl( this.prefixUrl, navImages.zoomOut.DOWN ),
+                onPress:    beginZoomingOutHandler, 
+                onRelease:  endZoomingHandler, 
+                onClick:    doSingleZoomOutHandler, 
+                onEnter:    beginZoomingOutHandler, 
+                onExit:     endZoomingHandler 
+            }),
+            goHome = new $.Button({ 
+                clickTimeThreshold: this.clickTimeThreshold,
+                clickDistThreshold: this.clickDistThreshold,
+                tooltip:    $.getString( "Tooltips.Home" ), 
+                srcRest:    resolveUrl( this.prefixUrl, navImages.home.REST ), 
+                srcGroup:   resolveUrl( this.prefixUrl, navImages.home.GROUP ), 
+                srcHover:   resolveUrl( this.prefixUrl, navImages.home.HOVER ), 
+                srcDown:    resolveUrl( this.prefixUrl, navImages.home.DOWN ),
+                onRelease:  onHomeHandler 
+            }),
+            fullPage = new $.Button({ 
+                clickTimeThreshold: this.clickTimeThreshold,
+                clickDistThreshold: this.clickDistThreshold,
+                tooltip:    $.getString( "Tooltips.FullPage" ),
+                srcRest:    resolveUrl( this.prefixUrl, navImages.fullpage.REST ),
+                srcGroup:   resolveUrl( this.prefixUrl, navImages.fullpage.GROUP ),
+                srcHover:   resolveUrl( this.prefixUrl, navImages.fullpage.HOVER ),
+                srcDown:    resolveUrl( this.prefixUrl, navImages.fullpage.DOWN ),
+                onRelease:  onFullPageHandler 
+            });
+
+        this.buttons = new $.ButtonGroup({ 
             clickTimeThreshold: this.clickTimeThreshold,
             clickDistThreshold: this.clickDistThreshold,
-            tooltip:    $.getString( "Tooltips.ZoomIn" ), 
-            srcRest:    resolveUrl( this.prefixUrl, navImages.zoomIn.REST ),
-            srcGroup:   resolveUrl( this.prefixUrl, navImages.zoomIn.GROUP ),
-            srcHover:   resolveUrl( this.prefixUrl, navImages.zoomIn.HOVER ),
-            srcDown:    resolveUrl( this.prefixUrl, navImages.zoomIn.DOWN ),
-            onPress:    beginZoomingInHandler,
-            onRelease:  endZoomingHandler,
-            onClick:    doSingleZoomInHandler,
-            onEnter:    beginZoomingInHandler,
-            onExit:     endZoomingHandler
-        }),
-        zoomOut = new $.Button({ 
-            clickTimeThreshold: this.clickTimeThreshold,
-            clickDistThreshold: this.clickDistThreshold,
-            tooltip:    $.getString( "Tooltips.ZoomOut" ), 
-            srcRest:    resolveUrl( this.prefixUrl, navImages.zoomOut.REST ), 
-            srcGroup:   resolveUrl( this.prefixUrl, navImages.zoomOut.GROUP ), 
-            srcHover:   resolveUrl( this.prefixUrl, navImages.zoomOut.HOVER ), 
-            srcDown:    resolveUrl( this.prefixUrl, navImages.zoomOut.DOWN ),
-            onPress:    beginZoomingOutHandler, 
-            onRelease:  endZoomingHandler, 
-            onClick:    doSingleZoomOutHandler, 
-            onEnter:    beginZoomingOutHandler, 
-            onExit:     endZoomingHandler 
-        }),
-        goHome = new $.Button({ 
-            clickTimeThreshold: this.clickTimeThreshold,
-            clickDistThreshold: this.clickDistThreshold,
-            tooltip:    $.getString( "Tooltips.Home" ), 
-            srcRest:    resolveUrl( this.prefixUrl, navImages.home.REST ), 
-            srcGroup:   resolveUrl( this.prefixUrl, navImages.home.GROUP ), 
-            srcHover:   resolveUrl( this.prefixUrl, navImages.home.HOVER ), 
-            srcDown:    resolveUrl( this.prefixUrl, navImages.home.DOWN ),
-            onRelease:  onHomeHandler 
-        }),
-        fullPage = new $.Button({ 
-            clickTimeThreshold: this.clickTimeThreshold,
-            clickDistThreshold: this.clickDistThreshold,
-            tooltip:    $.getString( "Tooltips.FullPage" ),
-            srcRest:    resolveUrl( this.prefixUrl, navImages.fullpage.REST ),
-            srcGroup:   resolveUrl( this.prefixUrl, navImages.fullpage.GROUP ),
-            srcHover:   resolveUrl( this.prefixUrl, navImages.fullpage.HOVER ),
-            srcDown:    resolveUrl( this.prefixUrl, navImages.fullpage.DOWN ),
-            onRelease:  onFullPageHandler 
+            buttons: [ 
+                zoomIn, 
+                zoomOut, 
+                goHome, 
+                fullPage 
+            ] 
         });
 
-    this.buttons = new $.ButtonGroup({ 
-        clickTimeThreshold: this.clickTimeThreshold,
-        clickDistThreshold: this.clickDistThreshold,
-        buttons: [ 
-            zoomIn, 
-            zoomOut, 
-            goHome, 
-            fullPage 
-        ] 
-    });
-
-    this.navControl  = this.buttons.element;
-    this.navControl[ $.SIGNAL ] = true;   // hack to get our controls to fade
-    this.addHandler( 'open', $.delegate( this, lightUp ) );
-
-    if ( this.showNavigationControl ) {
+        this.navControl  = this.buttons.element;
+        this.navControl[ $.SIGNAL ] = true;   // hack to get our controls to fade
+    	this.addHandler( 'open', $.delegate( this, lightUp ) );
         this.navControl.style.marginRight = "4px";
         this.navControl.style.marginBottom = "4px";
         this.addControl( this.navControl, $.ControlAnchor.BOTTOM_RIGHT );
