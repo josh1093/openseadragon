@@ -708,24 +708,20 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
     setVisible: function( visible ){
         this.container.style.visibility = visible ? "" : "hidden";
         return this;
-    }
+    },
 
     /**
      * @function
      * @name OpenSeadragon.Viewer.prototype.addLayer
      */
-    addLayer : function( tileSource ) {
-
+    addLayer: function( tileSource ) {
         var drawer = new $.Drawer(
             tileSource, 
             this.viewport, 
             this.canvas
         );
-
         this.drawers.push( drawer );
-
         updateOnce( this );
-
         return drawer.canvas;
 	}
 	
