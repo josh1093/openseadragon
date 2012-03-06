@@ -34,7 +34,7 @@ $.ButtonState = {
  * @property {String} srcGroup URL of image to use in 'up' state
  * @property {String} srcHover URL of image to use in 'hover' state
  * @property {String} srcDown URL of image to use in 'domn' state
- * @property {Object} config Configurable settings for this button.
+ * @property {Object} config Configurable settings for this button. DEPRECATED.
  * @property {Element} [element] Element to use as a container for the 
  *  button.
  * @property {Number} fadeDelay How long to wait before fading
@@ -53,48 +53,45 @@ $.Button = function( options ) {
 
     $.EventHandler.call( this );
 
-    this.tooltip   = options.tooltip;
-    this.srcRest   = options.srcRest;
-    this.srcGroup  = options.srcGroup;
-    this.srcHover  = options.srcHover;
-    this.srcDown   = options.srcDown;
+    $.extend( true, this, {
+        
+        tooltip:            null,
+        srcRest:            null,
+        srcGroup:           null,
+        srcHover:           null,
+        srcDown:            null,
+        clickTimeThreshold: $.DEFAULT_SETTINGS.clickTimeThreshold,
+        clickDistThreshold: $.DEFAULT_SETTINGS.clickDistThreshold,
+        // begin fading immediately
+        fadeDelay:          0,  
+        // fade over a period of 2 seconds    
+        fadeLength:         2000,
+        onPress:            null,
+        onRelease:          null,
+        onClick:            null,
+        onEnter:            null,
+        onExit:             null
+
+    }, options );
 
     //TODO: make button elements accessible by making them a-tags
     //      maybe even consider basing them on the element and adding
     //      methods jquery-style.
-    this.element    = options.element || $.makeNeutralElement( "a" );
-    this.element.href = '#';
-    this.config     = options.config;
+    this.element        = options.element || $.makeNeutralElement( "a" );
+    this.element.href   = '#';
 
-    if ( options.onPress ){
-        this.addHandler( "onPress", options.onPress );
-    }
-    if ( options.onRelease ){
-        this.addHandler( "onRelease", options.onRelease );
-    }
-    if ( options.onClick ){
-        this.addHandler( "onClick", options.onClick );
-    }
-    if ( options.onEnter ){
-        this.addHandler( "onEnter", options.onEnter );
-    }
-    if ( options.onExit ){
-        this.addHandler( "onExit", options.onExit );
-    }
+    this.addHandler( "onPress",     this.onPress );
+    this.addHandler( "onRelease",   this.onRelease );
+    this.addHandler( "onClick",     this.onClick );
+    this.addHandler( "onEnter",     this.onEnter );
+    this.addHandler( "onExit",      this.onExit );
 
     this.currentState = $.ButtonState.GROUP;
-    this.tracker    = new $.MouseTracker(
-        this.element, 
-        this.config.clickTimeThreshold, 
-        this.config.clickDistThreshold
-    );
-    this.imgRest    = $.makeTransparentImage( this.config.prefixURL + this.srcRest );
-    this.imgGroup   = $.makeTransparentImage( this.config.prefixURL + this.srcGroup );
-    this.imgHover   = $.makeTransparentImage( this.config.prefixURL + this.srcHover );
-    this.imgDown    = $.makeTransparentImage( this.config.prefixURL + this.srcDown );
+    this.imgRest      = $.makeTransparentImage( this.srcRest );
+    this.imgGroup     = $.makeTransparentImage( this.srcGroup );
+    this.imgHover     = $.makeTransparentImage( this.srcHover );
+    this.imgDown      = $.makeTransparentImage( this.srcDown );
 
-    this.fadeDelay      = 0;      // begin fading immediately
-    this.fadeLength     = 2000;   // fade over a period of 2 seconds
     this.fadeBeginTime  = null;
     this.shouldFade     = false;
 
@@ -107,40 +104,38 @@ $.Button = function( options ) {
     this.element.appendChild( this.imgHover );
     this.element.appendChild( this.imgDown );
 
-    var styleRest   = this.imgRest.style,
-        styleGroup  = this.imgGroup.style,
-        styleHover  = this.imgHover.style,
-        styleDown   = this.imgDown.style;
+    this.imgGroup.style.position = 
+    this.imgHover.style.position = 
+    this.imgDown.style.position  = 
+        "absolute";
 
-    styleGroup.position = 
-        styleHover.position = 
-        styleDown.position = 
-            "absolute";
+    this.imgGroup.style.top = 
+    this.imgHover.style.top = 
+    this.imgDown.style.top  = 
+        "0px";
 
-    styleGroup.top = 
-        styleHover.top = 
-        styleDown.top = 
-            "0px";
+    this.imgGroup.style.left = 
+    this.imgHover.style.left = 
+    this.imgDown.style.left  = 
+        "0px";
 
-    styleGroup.left = 
-        styleHover.left = 
-        styleDown.left = 
-            "0px";
+    this.imgHover.style.visibility = 
+    this.imgDown.style.visibility  = 
+        "hidden";
 
-    styleHover.visibility = 
-        styleDown.visibility = 
-            "hidden";
-
-    if ( $.Browser.vendor == $.BROWSERS.FIREFOX 
-         && $.Browser.version < 3 ){
-
-        styleGroup.top = 
-            styleHover.top = 
-            styleDown.top = "";
+    if ( $.Browser.vendor == $.BROWSERS.FIREFOX  && $.Browser.version < 3 ){
+        this.imgGroup.style.top = 
+        this.imgHover.style.top = 
+        this.imgDown.style.top  = 
+            "";
     }
 
-    //TODO - refactor mousetracer next to avoid this extension
-    $.extend( this.tracker, {
+    this.tracker = new $.MouseTracker({
+
+        element:            this.element, 
+        clickTimeThreshold: this.clickTimeThreshold, 
+        clickDistThreshold: this.clickDistThreshold,
+
         enterHandler: function( tracker, position, buttonDownElement, buttonDownAny ) {
             if ( buttonDownElement ) {
                 inTo( _this, $.ButtonState.DOWN );
@@ -149,16 +144,19 @@ $.Button = function( options ) {
                 inTo( _this, $.ButtonState.HOVER );
             }
         },
+
         exitHandler: function( tracker, position, buttonDownElement, buttonDownAny ) {
             outTo( _this, $.ButtonState.GROUP );
             if ( buttonDownElement ) {
                 _this.raiseEvent( "onExit", _this );
             }
         },
+
         pressHandler: function( tracker, position ) {
             inTo( _this, $.ButtonState.DOWN );
             _this.raiseEvent( "onPress", _this );
         },
+
         releaseHandler: function( tracker, position, insideElementPress, insideElementRelease ) {
             if ( insideElementPress && insideElementRelease ) {
                 outTo( _this, $.ButtonState.HOVER );
@@ -169,14 +167,15 @@ $.Button = function( options ) {
                 inTo( _this, $.ButtonState.HOVER );
             }
         },
+
         clickHandler: function( tracker, position, quick, shift ) {
             if ( quick ) {
                 _this.raiseEvent("onClick", _this);
             }
         }
-    });
 
-    this.tracker.setTracking( true );
+    }).setTracking( true );
+
     outTo( this, $.ButtonState.REST );
 };
 
@@ -218,11 +217,11 @@ function updateFade( button ) {
 
     if ( button.shouldFade ) {
         currentTime = +new Date();
-        deltaTime   = currentTime - this.fadeBeginTime;
-        opacity     = 1.0 - deltaTime / this.fadeLength;
+        deltaTime   = currentTime - button.fadeBeginTime;
+        opacity     = 1.0 - deltaTime / button.fadeLength;
         opacity     = Math.min( 1.0, opacity );
         opacity     = Math.max( 0.0, opacity );
-
+        
         $.setElementOpacity( button.imgGroup, opacity, true );
         if ( opacity > 0 ) {
             // fade again
@@ -233,7 +232,7 @@ function updateFade( button ) {
 
 function beginFading( button ) {
     button.shouldFade = true;
-    button.fadeBeginTime = new Date().getTime() + button.fadeDelay;
+    button.fadeBeginTime = +new Date() + button.fadeDelay;
     window.setTimeout( function(){ 
         scheduleFade( button );
     }, button.fadeDelay );
@@ -278,9 +277,9 @@ function outTo( button, newState ) {
         button.currentState = $.ButtonState.GROUP;
     }
 
-    if ( button.newState <= $.ButtonState.REST && 
+    if ( newState <= $.ButtonState.REST && 
          button.currentState == $.ButtonState.GROUP ) {
-        button.beginFading();
+        beginFading( button );
         button.currentState = $.ButtonState.REST;
     }
 };

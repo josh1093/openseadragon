@@ -1,5 +1,9 @@
 
 (function( $ ){
+     
+// dictionary from hash to private properties
+var THIS = {};   
+
 /**
  *
  * The main point of entry into creating a zoomable image on the page.
@@ -31,88 +35,39 @@ $.Viewer = function( options ) {
 
     $.EventHandler.call( this );
 
-    if( typeof( options ) != 'object' ){
+    //backward compatibility for positional args while prefering more 
+    //idiomatic javascript options object as the only argument
+    if( !$.isPlainObject( options ) ){
         options = {
             id:                 args[ 0 ],
             xmlPath:            args.length > 1 ? args[ 1 ] : undefined,
             prefixUrl:          args.length > 2 ? args[ 2 ] : undefined,
             controls:           args.length > 3 ? args[ 3 ] : undefined,
             overlays:           args.length > 4 ? args[ 4 ] : undefined,
-            overlayControls:    args.length > 5 ? args[ 5 ] : undefined,
-            config:             {}
+            overlayControls:    args.length > 5 ? args[ 5 ] : undefined
         };
+    }
+
+    //options.config and the general config argument are deprecated
+    //in favor of the more direct specification of optional settings
+    //being pass directly on the options object
+    if ( options.config ){
+        $.extend( true, options, options.config );
+        delete options.config;
     }
     
     //Allow the options object to override global defaults
     $.extend( true, this, { 
+
         id:                 options.id,
-        xmlPath:            null,
-        prefixUrl:          '',
+        hash:               options.id,
         controls:           [],
         overlays:           [],
         overlayControls:    [],
-        config: {
-            debugMode:          true,
-            animationTime:      1.5,
-            blendTime:          0.5,
-            alwaysBlend:        false,
-            autoHideControls:   true,
-            immediateRender:    false,
-            wrapHorizontal:     false,
-            wrapVertical:       false,
-            minZoomImageRatio:  0.8,
-            maxZoomPixelRatio:  2,
-            visibilityRatio:    0.5,
-            springStiffness:    5.0,
-            imageLoaderLimit:   0,
-            clickTimeThreshold: 200,
-            clickDistThreshold: 5,
-            zoomPerClick:       2.0,
-            zoomPerScroll:      1.2,
-            zoomPerSecond:      2.0,
-            showNavigationControl: true,
-            maxImageCacheCount: 100,
-            minPixelRatio:      0.5,
-            mouseNavEnabled:    true,
-            navImages: {
-                zoomIn: {
-                    REST:   '/images/zoomin_rest.png',
-                    GROUP:  '/images/zoomin_grouphover.png',
-                    HOVER:  '/images/zoomin_hover.png',
-                    DOWN:   '/images/zoomin_pressed.png'
-                },
-                zoomOut: {
-                    REST:   '/images/zoomout_rest.png',
-                    GROUP:  '/images/zoomout_grouphover.png',
-                    HOVER:  '/images/zoomout_hover.png',
-                    DOWN:   '/images/zoomout_pressed.png'
-                },
-                home: {
-                    REST:   '/images/home_rest.png',
-                    GROUP:  '/images/home_grouphover.png',
-                    HOVER:  '/images/home_hover.png',
-                    DOWN:   '/images/home_pressed.png'
-                },
-                fullpage: {
-                    REST:   '/images/fullpage_rest.png',
-                    GROUP:  '/images/fullpage_grouphover.png',
-                    HOVER:  '/images/fullpage_hover.png',
-                    DOWN:   '/images/fullpage_pressed.png'
-                }
-            }
-        },
 
-        //These were referenced but never defined
-        controlsFadeDelay:  2000,
-        controlsFadeLength: 1500,
-
-        //These are originally not part options but declared as members
-        //in initialize.  Its still considered idiomatic to put them here
-        source:     null,
-        drawer:     null,
+        //private state properties
         drawers:    [],
-        viewport:   null,
-        profiler:   null,
+        previousBody:       [],
 
         //This was originally initialized in the constructor and so could never
         //have anything in it.  now it can because we allow it to be specified
@@ -120,33 +75,43 @@ $.Viewer = function( options ) {
         //this array was returned from get_controls which I find confusing
         //since this object has a controls property which is treated in other
         //functions like clearControls.  I'm removing the accessors.
-        customControls: []
+        customControls: [],
 
-    }, options );
+        //These are originally not part options but declared as members
+        //in initialize.  Its still considered idiomatic to put them here
+        source:         null,
+        drawer:         null,
+        viewport:       null,
+        profiler:       null
 
-    this.element        = document.getElementById( options.id );
+    }, $.DEFAULT_SETTINGS, options );
+
+    this.element        = document.getElementById( this.id );
     this.container      = $.makeNeutralElement( "div" );
     this.canvas         = $.makeNeutralElement( "div" );
 
     //Used for toggling between fullscreen and default container size
+    //TODO: these can be closure private and shared across Viewer
+    //      instances.
     this.bodyWidth      = document.body.style.width;
     this.bodyHeight     = document.body.style.height;
     this.bodyOverflow   = document.body.style.overflow;
     this.docOverflow    = document.documentElement.style.overflow;
-    this.previousBody   = [];
 
-    this._fsBoundsDelta     = new $.Point( 1, 1 );
-    this._prevContainerSize = null;
-    this._lastOpenStartTime = 0;
-    this._lastOpenEndTime   = 0;
-    this._animating         = false;
-    this._forceRedraw       = false;
-    this._mouseInside       = false;
+    THIS[ this.hash ] = {
+        "fsBoundsDelta":     new $.Point( 1, 1 ),
+        "prevContainerSize": null,
+        "lastOpenStartTime": 0,
+        "lastOpenEndTime":   0,
+        "animating":         false,
+        "forceRedraw":       false,
+        "mouseInside":       false
+    };
 
     this.innerTracker = new $.MouseTracker({
         element:            this.canvas, 
-        clickTimeThreshold: this.config.clickTimeThreshold, 
-        clickDistThreshold: this.config.clickDistThreshold,
+        clickTimeThreshold: this.clickTimeThreshold, 
+        clickDistThreshold: this.clickDistThreshold,
         clickHandler:       $.delegate( this, onCanvasClick ),
         dragHandler:        $.delegate( this, onCanvasDrag ),
         releaseHandler:     $.delegate( this, onCanvasRelease ),
@@ -155,8 +120,8 @@ $.Viewer = function( options ) {
 
     this.outerTracker = new $.MouseTracker({
         element:            this.container, 
-        clickTimeThreshold: this.config.clickTimeThreshold, 
-        clickDistThreshold: this.config.clickDistThreshold,
+        clickTimeThreshold: this.clickTimeThreshold, 
+        clickDistThreshold: this.clickDistThreshold,
         enterHandler:       $.delegate( this, onContainerEnter ),
         exitHandler:        $.delegate( this, onContainerExit ),
         releaseHandler:     $.delegate( this, onContainerRelease )
@@ -202,16 +167,19 @@ $.Viewer = function( options ) {
         }
     }
 
+    //private state properties
+    $.extend( THIS[ this.hash ], {
+        "group":        null,
+        // whether we should be continuously zooming
+        "zooming":      false,
+        // how much we should be continuously zooming by
+        "zoomFactor":   null,  
+        "lastZoomTime": null
+    });
+
     //////////////////////////////////////////////////////////////////////////
     // Navigation Controls
     //////////////////////////////////////////////////////////////////////////
-    this._group         = null; 
-    // whether we should be continuously zooming
-    this._zooming       = false;
-    // how much we should be continuously zooming by
-    this._zoomFactor    = null;  
-    this._lastZoomTime  = null;
-    
     var beginZoomingInHandler   = $.delegate( this, beginZoomingIn ),
         endZoomingHandler       = $.delegate( this, endZooming ),
         doSingleZoomInHandler   = $.delegate( this, doSingleZoomIn ),
@@ -219,14 +187,15 @@ $.Viewer = function( options ) {
         doSingleZoomOutHandler  = $.delegate( this, doSingleZoomOut ),
         onHomeHandler           = $.delegate( this, onHome ),
         onFullPageHandler       = $.delegate( this, onFullPage ),
-        navImages               = this.config.navImages,
+        navImages               = this.navImages,
         zoomIn = new $.Button({ 
-            config:     this.config, 
+            clickTimeThreshold: this.clickTimeThreshold,
+            clickDistThreshold: this.clickDistThreshold,
             tooltip:    $.getString( "Tooltips.ZoomIn" ), 
-            srcRest:    resolveUrl( this.urlPrefix, navImages.zoomIn.REST ),
-            srcGroup:   resolveUrl( this.urlPrefix, navImages.zoomIn.GROUP ),
-            srcHover:   resolveUrl( this.urlPrefix, navImages.zoomIn.HOVER ),
-            srcDown:    resolveUrl( this.urlPrefix, navImages.zoomIn.DOWN ),
+            srcRest:    resolveUrl( this.prefixUrl, navImages.zoomIn.REST ),
+            srcGroup:   resolveUrl( this.prefixUrl, navImages.zoomIn.GROUP ),
+            srcHover:   resolveUrl( this.prefixUrl, navImages.zoomIn.HOVER ),
+            srcDown:    resolveUrl( this.prefixUrl, navImages.zoomIn.DOWN ),
             onPress:    beginZoomingInHandler,
             onRelease:  endZoomingHandler,
             onClick:    doSingleZoomInHandler,
@@ -234,12 +203,13 @@ $.Viewer = function( options ) {
             onExit:     endZoomingHandler
         }),
         zoomOut = new $.Button({ 
-            config:     this.config, 
+            clickTimeThreshold: this.clickTimeThreshold,
+            clickDistThreshold: this.clickDistThreshold,
             tooltip:    $.getString( "Tooltips.ZoomOut" ), 
-            srcRest:    resolveUrl( this.urlPrefix, navImages.zoomOut.REST ), 
-            srcGroup:   resolveUrl( this.urlPrefix, navImages.zoomOut.GROUP ), 
-            srcHover:   resolveUrl( this.urlPrefix, navImages.zoomOut.HOVER ), 
-            srcDown:    resolveUrl( this.urlPrefix, navImages.zoomOut.DOWN ),
+            srcRest:    resolveUrl( this.prefixUrl, navImages.zoomOut.REST ), 
+            srcGroup:   resolveUrl( this.prefixUrl, navImages.zoomOut.GROUP ), 
+            srcHover:   resolveUrl( this.prefixUrl, navImages.zoomOut.HOVER ), 
+            srcDown:    resolveUrl( this.prefixUrl, navImages.zoomOut.DOWN ),
             onPress:    beginZoomingOutHandler, 
             onRelease:  endZoomingHandler, 
             onClick:    doSingleZoomOutHandler, 
@@ -247,37 +217,45 @@ $.Viewer = function( options ) {
             onExit:     endZoomingHandler 
         }),
         goHome = new $.Button({ 
-            config:     this.config, 
+            clickTimeThreshold: this.clickTimeThreshold,
+            clickDistThreshold: this.clickDistThreshold,
             tooltip:    $.getString( "Tooltips.Home" ), 
-            srcRest:    resolveUrl( this.urlPrefix, navImages.home.REST ), 
-            srcGroup:   resolveUrl( this.urlPrefix, navImages.home.GROUP ), 
-            srcHover:   resolveUrl( this.urlPrefix, navImages.home.HOVER ), 
-            srcDown:    resolveUrl( this.urlPrefix, navImages.home.DOWN ),
+            srcRest:    resolveUrl( this.prefixUrl, navImages.home.REST ), 
+            srcGroup:   resolveUrl( this.prefixUrl, navImages.home.GROUP ), 
+            srcHover:   resolveUrl( this.prefixUrl, navImages.home.HOVER ), 
+            srcDown:    resolveUrl( this.prefixUrl, navImages.home.DOWN ),
             onRelease:  onHomeHandler 
         }),
         fullPage = new $.Button({ 
-            config:     this.config, 
+            clickTimeThreshold: this.clickTimeThreshold,
+            clickDistThreshold: this.clickDistThreshold,
             tooltip:    $.getString( "Tooltips.FullPage" ),
-            srcRest:    resolveUrl( this.urlPrefix, navImages.fullpage.REST ),
-            srcGroup:   resolveUrl( this.urlPrefix, navImages.fullpage.GROUP ),
-            srcHover:   resolveUrl( this.urlPrefix, navImages.fullpage.HOVER ),
-            srcDown:    resolveUrl( this.urlPrefix, navImages.fullpage.DOWN ),
+            srcRest:    resolveUrl( this.prefixUrl, navImages.fullpage.REST ),
+            srcGroup:   resolveUrl( this.prefixUrl, navImages.fullpage.GROUP ),
+            srcHover:   resolveUrl( this.prefixUrl, navImages.fullpage.HOVER ),
+            srcDown:    resolveUrl( this.prefixUrl, navImages.fullpage.DOWN ),
             onRelease:  onFullPageHandler 
         });
 
     this.buttons = new $.ButtonGroup({ 
-        config:     this.config, 
-        buttons:    [ zoomIn, zoomOut, goHome, fullPage ] 
+        clickTimeThreshold: this.clickTimeThreshold,
+        clickDistThreshold: this.clickDistThreshold,
+        buttons: [ 
+            zoomIn, 
+            zoomOut, 
+            goHome, 
+            fullPage 
+        ] 
     });
 
     this.navControl  = this.buttons.element;
     this.navControl[ $.SIGNAL ] = true;   // hack to get our controls to fade
     this.addHandler( 'open', $.delegate( this, lightUp ) );
 
-    if ( this.config.showNavigationControl ) {
+    if ( this.showNavigationControl ) {
         this.navControl.style.marginRight = "4px";
         this.navControl.style.marginBottom = "4px";
-        this.addControl(this.navControl, $.ControlAnchor.BOTTOM_RIGHT);
+        this.addControl( this.navControl, $.ControlAnchor.BOTTOM_RIGHT );
     }
 
     for ( i = 0; i < this.customControls.length; i++ ) {
@@ -298,8 +276,46 @@ $.Viewer = function( options ) {
         beginControlsAutoHide( _this );
     }, 1 );    // initial fade out
 
-    if ( this.xmlPath ){
-        this.openDzi( this.xmlPath );
+    var initialTileSource,
+        customTileSource;
+
+    if ( this.xmlPath  ){
+        //Deprecated option.  Now it is preferred to use the tileSources option
+        this.tileSources = [ this.xmlPath ];
+    }
+
+    if ( this.tileSources  ){
+        //tileSource is a complex option...
+        //It can be a string, object, function, or an array of any of these.
+        //A string implies a DZI
+        //An object implies a simple image
+        //A function implies a custom tile source callback
+        //An array implies a sequence of tile sources which can be any of the
+        //above
+        if( $.isArray( this.tileSources ) ){
+            if( $.isPlainObject( this.tileSources[ 0 ] ) ){
+                //This is a non-sequenced legacy tile source
+                initialTileSource = this.tileSources;
+            } else {
+                //Sequenced tile source
+                initialTileSource = this.tileSources[ 0 ];
+            }
+        } else {
+            initialTileSource = this.tileSources
+        }
+
+        if ( $.type( initialTileSource ) == 'string') {
+            //Standard DZI format
+            this.openDzi( initialTileSource );
+        } else if ( $.isArray( initialTileSource ) ){
+            //Legacy image pyramid
+            this.open( new $.LegacyTileSource( initialTileSource ) );
+        } else if ( $.isFunction( initialTileSource ) ){
+            //Custom tile source
+            customTileSource = new TileSource();
+            customTileSource.getTileUrl = initialTileSource;
+            this.open( customTileSource );
+        }
     }
 };
 
@@ -404,37 +420,54 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
         }
         
         // to ignore earlier opens
-        this._lastOpenStartTime = +new Date();
+        THIS[ this.hash ].lastOpenStartTime = +new Date();
 
         window.setTimeout( function () {
-            if ( _this._lastOpenStartTime > _this._lastOpenEndTime ) {
-                _this._setMessage( $.getString( "Messages.Loading" ) );
+            if ( THIS[ _this.hash ].lastOpenStartTime > THIS[ _this.hash ].lastOpenEndTime ) {
+                THIS[ _this.hash ].setMessage( $.getString( "Messages.Loading" ) );
             }
         }, 2000);
 
-        this._lastOpenEndTime = +new Date();
+        THIS[ this.hash ].lastOpenEndTime = +new Date();
         this.canvas.innerHTML = "";
-        this._prevContainerSize = $.getElementSize( this.container );
+        THIS[ this.hash ].prevContainerSize = $.getElementSize( this.container );
 
         if( source ){
             this.source = source;
         }
-        this.viewport = new $.Viewport( 
-            this._prevContainerSize, 
-            this.source.dimensions, 
-            this.config
-        );
-        this.drawer = new $.Drawer(
-            this.source, 
-            this.viewport, 
-            this.canvas
-        );
+
+        this.viewport = new $.Viewport({
+            containerSize:      THIS[ this.hash ].prevContainerSize, 
+            contentSize:        this.source.dimensions, 
+            springStiffness:    this.springStiffness,
+            animationTime:      this.animationTime,
+            minZoomImageRatio:  this.minZoomImageRatio,
+            maxZoomPixelRatio:  this.maxZoomPixelRatio,
+            visibilityRatio:    this.visibilityRatio,
+            wrapHorizontal:     this.wrapHorizontal,
+            wrapVertical:       this.wrapVertical
+        });
+
+        this.drawer = new $.Drawer({
+            source:             this.source, 
+            viewport:           this.viewport, 
+            element:            this.canvas,
+            maxImageCacheCount: this.maxImageCacheCount,
+            imageLoaderLimit:   this.imageLoaderLimit,
+            minZoomImageRatio:  this.minZoomImageRatio,
+            wrapHorizontal:     this.wrapHorizontal,
+            wrapVertical:       this.wrapVertical,
+            immediateRender:    this.immediateRender,
+            blendTime:          this.blendTime,
+            alwaysBlend:        this.alwaysBlend,
+            minPixelRatio:      this.minPixelRatio
+        });
         this.drawers.push( this.drawer );
 
         //this.profiler = new $.Profiler();
 
-        this._animating = false;
-        this._forceRedraw = true;
+        THIS[ this.hash ].animating = false;
+        THIS[ this.hash ].forceRedraw = true;
         scheduleUpdate( this, updateMulti );
 
         for ( i = 0; i < this.overlayControls.length; i++ ) {
@@ -628,7 +661,7 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
                 document.body.removeChild( document.body.childNodes[ 0 ] );
             }
             body.appendChild( this.container );
-            this._prevContainerSize = $.getWindowSize();
+            THIS[ this.hash ].prevContainerSize = $.getWindowSize();
 
             // mouse will be inside container now
             $.delegate( this, onContainerEnter )();    
@@ -654,7 +687,7 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
                 document.body.appendChild( this.previousBody.shift() );
             }
             this.element.appendChild( this.container );
-            this._prevContainerSize = $.getElementSize( this.element );
+            THIS[ this.hash ].prevContainerSize = $.getElementSize( this.element );
             
             // mouse will likely be outside now
             $.delegate( this, onContainerExit )();      
@@ -663,11 +696,11 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
 
         if ( this.viewport ) {
             oldBounds = this.viewport.getBounds();
-            this.viewport.resize( this._prevContainerSize );
+            this.viewport.resize( THIS[ this.hash ].prevContainerSize );
             newBounds = this.viewport.getBounds();
 
             if ( fullPage ) {
-                this._fsBoundsDelta = new $.Point(
+                THIS[ this.hash ].fsBoundsDelta = new $.Point(
                     newBounds.width  / oldBounds.width,
                     newBounds.height / oldBounds.height
                 );
@@ -675,15 +708,15 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, {
                 this.viewport.update();
                 this.viewport.zoomBy(
                     Math.max( 
-                        this._fsBoundsDelta.x, 
-                        this._fsBoundsDelta.y 
+                        THIS[ this.hash ].fsBoundsDelta.x, 
+                        THIS[ this.hash ].fsBoundsDelta.y 
                     ),
                     null, 
                     true
                 );
             }
 
-            this._forceRedraw = true;
+            THIS[ this.hash ].forceRedraw = true;
             this.raiseEvent( "resize", this );
             updateOnce( this );
         }
@@ -736,7 +769,7 @@ function scheduleUpdate( viewer, updateFunc, prevUpdateTime ){
         targetTime,
         deltaTime;
 
-    if ( this._animating ) {
+    if ( THIS[ viewer.hash ].animating ) {
         return window.setTimeout( function(){
             updateFunc( viewer );
         }, 1 );
@@ -762,7 +795,7 @@ function scheduleControlsFade( viewer ) {
 
 //initiates an animation to hide the controls
 function beginControlsAutoHide( viewer ) {
-    if ( !viewer.config.autoHideControls ) {
+    if ( !viewer.autoHideControls ) {
         return;
     }
     viewer.controlsShouldFade = true;
@@ -818,7 +851,7 @@ function onCanvasClick( tracker, position, quick, shift ) {
     var zoomPreClick,
         factor;
     if ( this.viewport && quick ) {    // ignore clicks where mouse moved         
-        zoomPerClick = this.config.zoomPerClick;
+        zoomPerClick = this.zoomPerClick;
         factor = shift ? 1.0 / zoomPerClick : zoomPerClick;
         this.viewport.zoomBy(
             factor, 
@@ -847,7 +880,7 @@ function onCanvasRelease( tracker, position, insideElementPress, insideElementRe
 function onCanvasScroll( tracker, position, scroll, shift ) {
     var factor;
     if ( this.viewport ) {
-        factor = Math.pow( this.config.zoomPerScroll, scroll );
+        factor = Math.pow( this.zoomPerScroll, scroll );
         this.viewport.zoomBy( 
             factor, 
             this.viewport.pointFromPixel( position, true ) 
@@ -858,8 +891,8 @@ function onCanvasScroll( tracker, position, scroll, shift ) {
 
 function onContainerExit( tracker, position, buttonDownElement, buttonDownAny ) {
     if ( !buttonDownElement ) {
-        this._mouseInside = false;
-        if ( !this._animating ) {
+        THIS[ this.hash ].mouseInside = false;
+        if ( !THIS[ this.hash ].animating ) {
             beginControlsAutoHide( this );
         }
     }
@@ -867,15 +900,15 @@ function onContainerExit( tracker, position, buttonDownElement, buttonDownAny ) 
 
 function onContainerRelease( tracker, position, insideElementPress, insideElementRelease ) {
     if ( !insideElementRelease ) {
-        this._mouseInside = false;
-        if ( !this._animating ) {
+        THIS[ this.hash ].mouseInside = false;
+        if ( !THIS[ this.hash ].animating ) {
             beginControlsAutoHide( this );
         }
     }
 };
 
 function onContainerEnter( tracker, position, buttonDownElement, buttonDownAny ) {
-    this._mouseInside = true;
+    THIS[ this.hash ].mouseInside = true;
     abortControlsAutoHide( this );
 };
 
@@ -921,15 +954,15 @@ function updateOnce( viewer ) {
     //viewer.profiler.beginUpdate();
 
     containerSize = $.getElementSize( viewer.container );
-    if ( !containerSize.equals( viewer._prevContainerSize ) ) {
+    if ( !containerSize.equals( THIS[ viewer.hash ].prevContainerSize ) ) {
         // maintain image position
         viewer.viewport.resize( containerSize, true ); 
-        viewer._prevContainerSize = containerSize;
+        THIS[ viewer.hash ].prevContainerSize = containerSize;
         viewer.raiseEvent( "resize" );
     }
 
     animated = viewer.viewport.update();
-    if ( !viewer._animating && animated ) {
+    if ( !THIS[ viewer.hash ].animating && animated ) {
         viewer.raiseEvent( "animationstart" );
         abortControlsAutoHide( viewer );
     }
@@ -954,20 +987,20 @@ function updateOnce( viewer ) {
     if ( animated ) {
         updateDrawers();
         viewer.raiseEvent( "animation" );
-    } else if ( viewer._forceRedraw || drawersNeedUpdate() ) {
+    } else if ( THIS[ viewer.hash ].forceRedraw || drawersNeedUpdate() ) {
         updateDrawers();
-        viewer._forceRedraw = false;
+        THIS[ viewer.hash ].forceRedraw = false;
     } 
 
-    if ( viewer._animating && !animated ) {
+    if ( THIS[ viewer.hash ].animating && !animated ) {
         viewer.raiseEvent( "animationfinish" );
 
-        if ( !viewer._mouseInside ) {
+        if ( !THIS[ viewer.hash ].mouseInside ) {
             beginControlsAutoHide( viewer );
         }
     }
 
-    viewer._animating = animated;
+    THIS[ viewer.hash ].animating = animated;
 
     //viewer.profiler.endUpdate();
 };
@@ -982,21 +1015,21 @@ function resolveUrl( prefix, url ) {
 
 
 function beginZoomingIn() {
-    this._lastZoomTime = +new Date();
-    this._zoomFactor = this.config.zoomPerSecond;
-    this._zooming = true;
+    THIS[ this.hash ].lastZoomTime = +new Date();
+    THIS[ this.hash ].zoomFactor = this.zoomPerSecond;
+    THIS[ this.hash ].zooming = true;
     scheduleZoom( this );
 }
 
 function beginZoomingOut() {
-    this._lastZoomTime = +new Date();
-    this._zoomFactor = 1.0 / this.config.zoomPerSecond;
-    this._zooming = true;
+    THIS[ this.hash ].lastZoomTime = +new Date();
+    THIS[ this.hash ].zoomFactor = 1.0 / this.zoomPerSecond;
+    THIS[ this.hash ].zooming = true;
     scheduleZoom( this );
 }
 
 function endZooming() {
-    this._zooming = false;
+    THIS[ this.hash ].zooming = false;
 }
 
 function scheduleZoom( viewer ) {
@@ -1008,23 +1041,23 @@ function doZoom() {
         deltaTime,
         adjustFactor;
 
-    if ( this._zooming && this.viewport) {
+    if ( THIS[ this.hash ].zooming && this.viewport) {
         currentTime     = +new Date();
-        deltaTime       = currentTime - this._lastZoomTime;
-        adjustedFactor  = Math.pow( this._zoomFactor, deltaTime / 1000 );
+        deltaTime       = currentTime - THIS[ this.hash ].lastZoomTime;
+        adjustedFactor  = Math.pow( THIS[ this.hash ].zoomFactor, deltaTime / 1000 );
 
         this.viewport.zoomBy( adjustedFactor );
         this.viewport.applyConstraints();
-        this._lastZoomTime = currentTime;
+        THIS[ this.hash ].lastZoomTime = currentTime;
         scheduleZoom( this );
     }
 };
 
 function doSingleZoomIn() {
     if ( this.viewport ) {
-        this._zooming = false;
+        THIS[ this.hash ].zooming = false;
         this.viewport.zoomBy( 
-            this.config.zoomPerClick / 1.0 
+            this.zoomPerClick / 1.0 
         );
         this.viewport.applyConstraints();
     }
@@ -1032,9 +1065,9 @@ function doSingleZoomIn() {
 
 function doSingleZoomOut() {
     if ( this.viewport ) {
-        this._zooming = false;
+        THIS[ this.hash ].zooming = false;
         this.viewport.zoomBy(
-            1.0 / this.config.zoomPerClick
+            1.0 / this.zoomPerClick
         );
         this.viewport.applyConstraints();
     }
