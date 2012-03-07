@@ -14,13 +14,16 @@
  * @property {String} tilesUrl
  * @property {String} fileFormat
  * @property {OpenSeadragon.DisplayRect[]} displayRects
+ * @property {Number} minLevel
+ * @property {Number} maxLevel
  */ 
-$.DziTileSource = function( width, height, tileSize, tileOverlap, tilesUrl, fileFormat, displayRects ) {
+
+$.DziTileSource = function( width, height, tileSize, tileOverlap, tilesUrl, fileFormat, displayRects, minLevel, maxLevel ) {
     var i,
         rect,
         level;
 
-    $.TileSource.call( this, width, height, tileSize, tileOverlap, null, null );
+    $.TileSource.call( this, width, height, tileSize, tileOverlap, minLevel, maxLevel );
 
     this._levelRects  = {};
     this.tilesUrl     = tilesUrl;
