@@ -118,9 +118,14 @@ $.Tile.prototype = {
      * @param {Canvas} context
      */
     drawCanvas: function( context ) {
-
-        var position = this.position,
-            size     = this.size;
+        
+        //
+        // accounts for issues with sub-pixel rendering in canvas.  long story short drawImage snaps to pixels,
+        // so to avoid getting awkward lines between our tiles we do the conversion ourselves.
+        //
+        var position = this.position.apply( Math.floor ),
+            delta    = this.position.minus(position),
+            size     = this.size.plus(delta).apply(Math.floor);
 
         if ( !this.loaded ) {
             $.console.warn(

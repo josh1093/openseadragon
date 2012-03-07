@@ -5168,9 +5168,14 @@ $.Tile.prototype = {
      * @param {Canvas} context
      */
     drawCanvas: function( context ) {
-
-        var position = this.position,
-            size     = this.size;
+        
+        //
+        // accounts for issues with sub-pixel rendering in canvas.  long story short drawImage snaps to pixels,
+        // so to avoid getting awkward lines between our tiles we do the conversion ourselves.
+        //
+        var position = this.position.apply( Math.floor ),
+            delta    = this.position.minus(position),
+            size     = this.size.plus(delta).apply(Math.floor);
 
         if ( !this.loaded ) {
             $.console.warn(
@@ -6057,9 +6062,12 @@ function positionTile( tile, overlap, viewport, viewportCenter, levelVisibility 
         tileCenter   = positionT.plus( sizeT.divide( 2 ) ),
         tileDistance = viewportCenter.distanceTo( tileCenter );
 
-    if ( !overlap ) {
-        sizeC = sizeC.plus( new $.Point( 1, 1 ) );
-    }
+    // NOTE - this was meant to avoid extra spaces between tiles due to lack of sub-pixel rendering for images.
+    // we've added code to adjust for that in Tile.drawCanvas().  With the below on you get overlap which looks
+    // bad with semi-transparent layers.  Josh.
+    // if ( !overlap ) {
+    //     sizeC = sizeC.plus( new $.Point( 1, 1 ) );
+    // }
 
     tile.position   = positionC;
     tile.size       = sizeC;
