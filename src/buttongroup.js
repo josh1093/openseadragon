@@ -24,9 +24,10 @@
 $.ButtonGroup = function( options ) {
 
     $.extend( true, this, {
-        buttons:            null,
+        buttons:            [],
         clickTimeThreshold: $.DEFAULT_SETTINGS.clickTimeThreshold,
-        clickDistThreshold: $.DEFAULT_SETTINGS.clickDistThreshold
+        clickDistThreshold: $.DEFAULT_SETTINGS.clickDistThreshold,
+        labelText:          ""
     }, options );
 
     // copy the botton elements
@@ -34,12 +35,18 @@ $.ButtonGroup = function( options ) {
         _this = this,
         i;
 
-    this.element = options.group || $.makeNeutralElement( "span" );
-    this.element.style.display = "inline-block";
-    for ( i = 0; i < buttons.length; i++ ) {
-        this.element.appendChild( buttons[ i ].element );
+    this.element = options.element || $.makeNeutralElement( "fieldgroup" );
+    
+    if( !options.group ){
+        this.label   = $.makeNeutralElement( "label" );
+        //TODO: support labels for ButtonGroups
+        //this.label.innerHTML = this.labelText;
+        this.element.style.display = "inline-block";
+        this.element.appendChild( this.label );
+        for ( i = 0; i < buttons.length; i++ ) {
+            this.element.appendChild( buttons[ i ].element );
+        }
     }
-
 
     this.tracker = new $.MouseTracker({
         element:            this.element, 

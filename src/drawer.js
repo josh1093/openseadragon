@@ -2,7 +2,7 @@
 (function( $ ){
     
 var TIMEOUT             = 5000,
-
+    DEVICE_SCREEN       = $.getWindowSize(),
     BROWSER             = $.Browser.vendor,
     BROWSER_VERSION     = $.Browser.version,
 
@@ -10,11 +10,14 @@ var TIMEOUT             = 5000,
         ( BROWSER == $.BROWSERS.FIREFOX ) ||
         ( BROWSER == $.BROWSERS.OPERA )   ||
         ( BROWSER == $.BROWSERS.SAFARI && BROWSER_VERSION >= 4 ) ||
-        ( BROWSER == $.BROWSERS.CHROME && BROWSER_VERSION >= 2 )
-    ) && ( !navigator.appVersion.match( 'Mobile' ) ),
+        ( BROWSER == $.BROWSERS.CHROME && BROWSER_VERSION >= 2 ) ||
+        ( BROWSER == $.BROWSERS.IE     && BROWSER_VERSION >= 9 )
+    ), 
 
-    USE_CANVAS = $.isFunction( document.createElement( "canvas" ).getContext ) &&
-        SUBPIXEL_RENDERING;
+    USE_CANVAS = SUBPIXEL_RENDERING 
+        && !( DEVICE_SCREEN.x < 600 || DEVICE_SCREEN.y < 600 ) 
+        && !( navigator.appVersion.match( 'Mobile' ) )
+        && $.isFunction( document.createElement( "canvas" ).getContext );
 
 //console.error( 'USE_CANVAS ' + USE_CANVAS );
 
@@ -45,7 +48,9 @@ $.Drawer = function( options ) {
     
     //backward compatibility for positional args while prefering more 
     //idiomatic javascript options object as the only argument
-    var args  = arguments;
+    var args  = arguments,
+        i;
+
     if( !$.isPlainObject( options ) ){
         options = {
             source:     args[ 0 ],
@@ -55,20 +60,19 @@ $.Drawer = function( options ) {
     }
 
     $.extend( true, this, {
-        //references to closely related openseadragon objects
-        //viewport:       null,
-        //source:         null,
 
         //internal state properties
         downloading:    0,
         tilesMatrix:    {},
         tilesLoaded:    [],
         coverage:       {},
-        overlays:       [],
         lastDrawn:      [],
         lastResetTime:  0,
         midUpdate:      false,
         updateAgain:    true,
+
+        //internal state / configurable settings 
+        overlays:       [],
 
         //configurable settings
         maxImageCacheCount: $.DEFAULT_SETTINGS.maxImageCacheCount,
@@ -97,6 +101,37 @@ $.Drawer = function( options ) {
     // explicit left-align
     this.container.style.textAlign = "left";
     this.container.appendChild( this.canvas );
+
+    //create the correct type of overlay by convention if the overlays
+    //are not already OpenSeadragon.Overlays
+    for( i = 0; i < this.overlays.length; i++ ){
+        if( $.isPlainObject( this.overlays[ i ] ) ){
+            
+            (function( _this, overlay ){
+                
+                var link  = document.createElement("a"),
+                    rect = new $.Rect(
+                        overlay.x, 
+                        overlay.y, 
+                        overlay.width, 
+                        overlay.height
+                    ),
+                    id = Math.floor(Math.random()*10000000);
+
+                link.href      = "#/overlay/"+id;
+                link.id        = id;
+                link.className = overlay.className ?
+                    overlay.className :
+                    "openseadragon-overlay";
+
+                _this.overlays[ i ] = new $.Overlay( link, rect );
+
+            }( this, this.overlays[ i ] ));
+
+        } else if ( $.isFunction( this.overlays[ i ] ) ){
+            
+        }
+    }
 
     //this.profiler    = new $.Profiler();
 };
@@ -502,7 +537,8 @@ function updateTile( drawer, drawLevel, haveDrawn, x, y, level, levelOpacity, le
             numberOfTiles, 
             drawer.normHeight 
         ),
-        drawTile = drawLevel;
+        drawTile = drawLevel,
+        newbest;
 
     setCoverage( drawer.coverage, level, x, y, false );
 
@@ -540,9 +576,9 @@ function updateTile( drawer, drawLevel, haveDrawn, x, y, level, levelOpacity, le
             levelOpacity, 
             currentTime 
         );
-
     } else if ( tile.loading ) {
         // the tile is already in the download queue 
+        // thanks josh1093 for finally translating this typo
     } else {
         best = compareTiles( best, tile );
     }

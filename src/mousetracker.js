@@ -81,6 +81,9 @@
         this.scrollHandler      = options.scrollHandler  || null;
         this.clickHandler       = options.clickHandler   || null;
         this.dragHandler        = options.dragHandler    || null;
+        this.keyHandler         = options.keyHandler     || null;
+        this.focusHandler       = options.focusHandler   || null;
+        this.blurHandler        = options.blurHandler    || null;
 
         //Store private properties in a scope sealed hash map
         var _this = this;
@@ -118,6 +121,9 @@
             "touchstart":       function( event ){ onTouchStart( _this, event ); },
             "touchmove":        function( event ){ onTouchMove( _this, event ); },
             "touchend":         function( event ){ onTouchEnd( _this, event ); },
+            "keypress":         function( event ){ onKeyPress( _this, event ); },
+            "focus":            function( event ){ onFocus( _this, event ); },
+            "blur":             function( event ){ onBlur( _this, event ); },
             tracking:           false,
             capturing:          false,
             buttonDown:         false,
@@ -263,8 +269,24 @@
          * @param {Boolean} shift
          *      Was the shift key being pressed during this event?
          */
-        dragHandler: function(){}
+        dragHandler: function(){},
 
+        /**
+         * Implement or assign implmentation to these handlers during or after
+         * calling the constructor. 
+         * @function
+         * @param {OpenSeadragon.MouseTracker} tracker  
+         *      A reference to the tracker instance.
+         * @param {Number} keyCode
+         *      The key code that was pressed.
+         * @param {Boolean} shift
+         *      Was the shift key being pressed during this event?
+         */
+        keyHandler: function(){},
+
+        focusHandler: function(){},
+
+        blurHandler: function(){}
     };
 
     /**
@@ -277,7 +299,9 @@
                 "mouseover", "mouseout", "mousedown", "mouseup", 
                 "click",
                 "DOMMouseScroll", "mousewheel", 
-                "touchstart", "touchmove", "touchend"
+                "touchstart", "touchmove", "touchend",
+                "keypress",
+                "focus", "blur"
             ], 
             delegate = THIS[ tracker.hash ],
             event, 
@@ -308,7 +332,9 @@
                 "mouseover", "mouseout", "mousedown", "mouseup", 
                 "click",
                 "DOMMouseScroll", "mousewheel", 
-                "touchstart", "touchmove", "touchend"
+                "touchstart", "touchmove", "touchend",
+                "keypress",
+                "focus", "blur"
             ],
             delegate = THIS[ tracker.hash ],
             event, 
@@ -348,7 +374,7 @@
         var delegate = THIS[ tracker.hash ];
         if ( !delegate.capturing ) {
 
-            if ( $.Browser.vendor == $.BROWSERS.IE ) {
+            if ( $.Browser.vendor == $.BROWSERS.IE && $.Browser.version < 9 ) {
                 $.removeEvent( 
                     tracker.element, 
                     "mouseup", 
@@ -395,7 +421,7 @@
         var delegate = THIS[ tracker.hash ];
         if ( delegate.capturing ) {
 
-            if ( $.Browser.vendor == $.BROWSERS.IE ) {
+            if ( $.Browser.vendor == $.BROWSERS.IE && $.Browser.version < 9 ) {
                 $.removeEvent( 
                     tracker.element, 
                     "mousemove", 
@@ -440,8 +466,66 @@
     function triggerOthers( tracker, handler, event ) {
         var otherHash;
         for ( otherHash in ACTIVE ) {
-            if ( trackers.hasOwnProperty( otherHash ) && tracker.hash != otherHash ) {
+            if ( ACTIVE.hasOwnProperty( otherHash ) && tracker.hash != otherHash ) {
                 handler( ACTIVE[ otherHash ], event );
+            }
+        }
+    };
+
+
+    /**
+     * @private
+     * @inner
+     */
+    function onFocus( tracker, event ){
+        //console.log( "focus %s", event );
+        var propagate;
+        if ( tracker.focusHandler ) {
+            propagate = tracker.focusHandler( 
+                tracker, 
+                event
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
+            }
+        }
+    };
+
+
+    /**
+     * @private
+     * @inner
+     */
+    function onBlur( tracker, event ){
+        //console.log( "blur %s", event );
+        var propagate;
+        if ( tracker.blurHandler ) {
+            propagate = tracker.blurHandler( 
+                tracker, 
+                event
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
+            }
+        }
+    };
+
+    
+    /**
+     * @private
+     * @inner
+     */
+    function onKeyPress( tracker, event ){
+        //console.log( "keypress %s %s %s %s %s", event.keyCode, event.charCode, event.ctrlKey, event.shiftKey, event.altKey );
+        var propagate;
+        if ( tracker.keyHandler ) {
+            propagate = tracker.keyHandler( 
+                tracker, 
+                event.keyCode ? event.keyCode : event.charCode,
+                event.shiftKey
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
         }
     };
@@ -454,9 +538,11 @@
     function onMouseOver( tracker, event ) {
 
         var event = $.getEvent( event ),
-            delegate = THIS[ tracker.hash ];
+            delegate = THIS[ tracker.hash ],
+            propagate;
 
         if ( $.Browser.vendor == $.BROWSERS.IE && 
+             $.Browser.version < 9 && 
              delegate.capturing && 
              !isChild( event.srcElement, tracker.element ) ) {
 
@@ -479,20 +565,14 @@
         delegate.insideElement = true;
 
         if ( tracker.enterHandler ) {
-            try {
-                tracker.enterHandler(
-                    tracker, 
-                    getMouseRelative( event, tracker.element ),
-                    delegate.buttonDown, 
-                    IS_BUTTON_DOWN
-                );
-            } catch ( e ) {
-                $.console.error(
-                    "%s while executing enter handler: %s", 
-                    e.name,
-                    e.message,
-                    e
-                );
+            propagate = tracker.enterHandler(
+                tracker, 
+                getMouseRelative( event, tracker.element ),
+                delegate.buttonDown, 
+                IS_BUTTON_DOWN
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
         }
     };
@@ -504,9 +584,11 @@
      */
     function onMouseOut( tracker, event ) {
         var event = $.getEvent( event ),
-            delegate = THIS[ tracker.hash ];
+            delegate = THIS[ tracker.hash ],
+            propagate;
 
         if ( $.Browser.vendor == $.BROWSERS.IE && 
+             $.Browser.version < 9 &&
              delegate.capturing && 
              !isChild( event.srcElement, tracker.element ) ) {
 
@@ -529,20 +611,15 @@
         delegate.insideElement = false;
 
         if ( tracker.exitHandler ) {
-            try {
-                tracker.exitHandler( 
-                    tracker, 
-                    getMouseRelative( event, tracker.element ),
-                    delegate.buttonDown, 
-                    IS_BUTTON_DOWN
-                );
-            } catch ( e ) {
-                $.console.error(
-                    "%s while executing exit handler: %s", 
-                    e.name,
-                    e.message,
-                    e
-                );
+            propagate = tracker.exitHandler( 
+                tracker, 
+                getMouseRelative( event, tracker.element ),
+                delegate.buttonDown, 
+                IS_BUTTON_DOWN
+            );
+
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
         }
     };
@@ -554,7 +631,8 @@
      */
     function onMouseDown( tracker, event ) {
         var event = $.getEvent( event ),
-            delegate = THIS[ tracker.hash ];
+            delegate = THIS[ tracker.hash ],
+            propagate;
 
         if ( event.button == 2 ) {
             return;
@@ -567,18 +645,12 @@
         delegate.lastMouseDownTime = +new Date();
 
         if ( tracker.pressHandler ) {
-            try {
-                tracker.pressHandler( 
-                    tracker, 
-                    getMouseRelative( event, tracker.element )
-                );
-            } catch (e) {
-                $.console.error(
-                    "%s while executing press handler: %s", 
-                    e.name,
-                    e.message,
-                    e
-                );
+            propagate = tracker.pressHandler( 
+                tracker, 
+                getMouseRelative( event, tracker.element )
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
         }
 
@@ -586,12 +658,13 @@
             $.cancelEvent( event );
         }
 
-        if ( !( $.Browser.vendor == $.BROWSERS.IE ) || !IS_CAPTURING ) {
+        if ( !( $.Browser.vendor == $.BROWSERS.IE && $.Browser.version < 9 ) || 
+             !IS_CAPTURING ) {
             captureMouse( tracker );
             IS_CAPTURING = true;
             // reset to empty & add us
             CAPTURING = [ tracker ];     
-        } else if ( $.Browser.vendor == $.BROWSERS.IE ) {
+        } else if ( $.Browser.vendor == $.BROWSERS.IE  && $.Browser.version < 9 ) {
             // add us to the list
             CAPTURING.push( tracker );   
         }
@@ -638,7 +711,8 @@
             //were we inside the tracked element when we were pressed
             insideElementPress = delegate.buttonDown,
             //are we still inside the tracked element when we released
-            insideElementRelease = delegate.insideElement;
+            insideElementRelease = delegate.insideElement,
+            propagate;
 
         if ( event.button == 2 ) {
             return;
@@ -647,20 +721,14 @@
         delegate.buttonDown = false;
 
         if ( tracker.releaseHandler ) {
-            try {
-                tracker.releaseHandler(
-                    tracker, 
-                    getMouseRelative( event, tracker.element ),
-                    insideElementPress, 
-                    insideElementRelease
-                );
-            } catch (e) {
-                $.console.error(
-                    "%s while executing release handler: %s", 
-                    e.name,
-                    e.message,
-                    e
-                );
+            propagate = tracker.releaseHandler(
+                tracker, 
+                getMouseRelative( event, tracker.element ),
+                insideElementPress, 
+                insideElementRelease
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
         }
 
@@ -762,7 +830,8 @@
      * @inner
      */
     function onMouseWheelSpin( tracker, event ) {
-        var nDelta = 0;
+        var nDelta = 0,
+            propagate;
         
         if ( !event ) { // For IE, access the global (window) event object
             event = window.event;
@@ -782,23 +851,15 @@
         nDelta = nDelta > 0 ? 1 : -1;
 
         if ( tracker.scrollHandler ) {
-            try {
-                tracker.scrollHandler(
-                    tracker, 
-                    getMouseRelative( event, tracker.element ), 
-                    nDelta, 
-                    event.shiftKey
-                );
-            } catch (e) {
-                $.console.error(
-                    "%s while executing scroll handler: %s", 
-                    e.name,
-                    e.message,
-                    e
-                );
+            propagate = tracker.scrollHandler(
+                tracker, 
+                getMouseRelative( event, tracker.element ), 
+                nDelta, 
+                event.shiftKey
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
-
-            $.cancelEvent( event );
         }
     };
 
@@ -809,7 +870,8 @@
      */
     function handleMouseClick( tracker, event ) {
         var event = $.getEvent( event ),
-            delegate = THIS[ tracker.hash ];
+            delegate = THIS[ tracker.hash ],
+            propagate;
 
         if ( event.button == 2 ) {
             return;
@@ -822,20 +884,14 @@
                        distance <= tracker.clickDistThreshold;
 
         if ( tracker.clickHandler ) {
-            try {
-                tracker.clickHandler(
-                    tracker, 
-                    getMouseRelative( event, tracker.element ),
-                    quick, 
-                    event.shiftKey
-                );
-            } catch ( e ) {
-                $.console.error(
-                    "%s while executing click handler: %s", 
-                    e.name,
-                    e.message, 
-                    e
-                );
+            propagate = tracker.clickHandler(
+                tracker, 
+                getMouseRelative( event, tracker.element ),
+                quick, 
+                event.shiftKey
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
         }
     };
@@ -849,28 +905,21 @@
         var event = $.getEvent( event ),
             delegate = THIS[ tracker.hash ],
             point = getMouseAbsolute( event ),
-            delta = point.minus( delegate.lastPoint );
+            delta = point.minus( delegate.lastPoint ),
+            propagate;
 
         delegate.lastPoint = point;
 
         if ( tracker.dragHandler ) {
-            try {
-                tracker.dragHandler(
-                    tracker, 
-                    getMouseRelative( event, tracker.element ),
-                    delta, 
-                    event.shiftKey
-                );
-            } catch (e) {
-                $.console.error(
-                    "%s while executing drag handler: %s", 
-                    e.name,
-                    e.message,  
-                    e
-                );
+            propagate = tracker.dragHandler(
+                tracker, 
+                getMouseRelative( event, tracker.element ),
+                delta, 
+                event.shiftKey
+            );
+            if( propagate === false ){
+                $.cancelEvent( event );
             }
-
-            $.cancelEvent( event );
         }
     };
 
@@ -990,7 +1039,7 @@
 
 
     (function () {
-        if ( $.Browser.vendor == $.BROWSERS.IE ) {
+        if ( $.Browser.vendor == $.BROWSERS.IE && $.Browser.version < 9 ) {
             $.addEvent( document, "mousedown", onGlobalMouseDown, false );
             $.addEvent( document, "mouseup", onGlobalMouseUp, false );
         } else {
