@@ -4141,7 +4141,7 @@ $.extend( $.Viewer.prototype, $.EventHandler.prototype, $.ControlDock.prototype,
 
             
         }
-    }
+    },
 
     /**
      * @function
