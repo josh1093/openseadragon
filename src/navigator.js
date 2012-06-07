@@ -69,7 +69,7 @@ $.Navigator = function( options ){
         //TODO: IE doesnt like this property being set
         try{ style.outline  = '2px auto #900'; }catch(e){/*ignore*/}
         style.background    = 'transparent';
-        style.float         = 'left'; //Webkit
+        style['float']         = 'left'; //Webkit
         style.cssFloat      = 'left'; //Firefox
         style.styleFloat    = 'left'; //IE
         style.zIndex        = 999999999;
